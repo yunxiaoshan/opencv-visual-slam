@@ -38,7 +38,7 @@ int main( int argc, char** argv )
 
     detector->detect( img_1, kps );
 
-    // TODO Initialize grid
+    // TODO Initialize grid in jetson board
     // std::cout << img_1.rows << " " << img_1.cols << std::endl;
     int grid_c_size = 16;
     int grid_r_size = 12;
