@@ -14,6 +14,8 @@ using namespace std;
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/video/tracking.hpp>
+#include <opencv2/gpu/gpu.hpp>
+
 
 using namespace cv;
 int main( int argc, char** argv )
@@ -76,13 +78,13 @@ int main( int argc, char** argv )
 		prev_kpts_mat.at<Vec2f>(0, i)[1] = prev_keypoints[i].y;
 	}
 
-    GpuMat d_frame0(img_1);
-    GpuMat d_frame1(img_2);
-    GpuMat d_prevPts(prev_kpts_mat);
-    GpuMat d_nextPts;
-    GpuMat d_backPts;
-    GpuMat d_status;
-    GpuMat d_back_status;
+    cv::cuda::GpuMat d_frame0(img_1);
+    cv::cuda::GpuMat d_frame1(img_2);
+    cv::cuda::GpuMat d_prevPts(prev_kpts_mat);
+    cv::cuda::GpuMat d_nextPts;
+    cv::cuda::GpuMat d_backPts;
+    cv::cuda::GpuMat d_status;
+    cv::cuda::GpuMat d_back_status;
     PyrLKOpticalFlow d_pyrLK;
 
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
