@@ -18,6 +18,22 @@ using namespace std;
 
 
 using namespace cv;
+using namespace cv::gpu;
+
+static void download(const GpuMat& d_mat, vector<Point2f>& vec)
+{
+    vec.resize(d_mat.cols);
+    Mat mat(1, d_mat.cols, CV_32FC2, (void*)&vec[0]);
+    d_mat.download(mat);
+}
+
+static void download(const GpuMat& d_mat, vector<uchar>& vec)
+{
+    vec.resize(d_mat.cols);
+    Mat mat(1, d_mat.cols, CV_8UC1, (void*)&vec[0]);
+    d_mat.download(mat);
+}
+
 int main( int argc, char** argv )
 {
 
@@ -98,12 +114,12 @@ int main( int argc, char** argv )
     // ====== GPU Version =======
     // forward
     d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
-    downloadpts(d_nextPts, next_keypoints);
-	downloadmask(d_status, forward_status);
+    download(d_nextPts, next_keypoints);
+	download(d_status, forward_status);
     // backward
 	d_pyrLK.sparse(d_frame1, d_frame0, d_nextPts, d_backPts, d_back_status);
-	downloadpts(d_backPts, back_keypoints);
-	downloadmask(d_back_status, backward_status);
+	download(d_backPts, back_keypoints);
+	download(d_back_status, backward_status);
 
     for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
         double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
