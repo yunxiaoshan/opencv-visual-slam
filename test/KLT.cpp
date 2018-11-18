@@ -85,7 +85,7 @@ int main( int argc, char** argv )
     cv::gpu::GpuMat d_backPts;
     cv::gpu::GpuMat d_status;
     cv::gpu::GpuMat d_back_status;
-    PyrLKOpticalFlow d_pyrLK;
+    cv::gpu::PyrLKOpticalFlow d_pyrLK;
 
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
