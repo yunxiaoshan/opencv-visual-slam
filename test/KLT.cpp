@@ -37,7 +37,7 @@ int main( int argc, char** argv )
 
 
     detector->detect( img_1, kps );
-    
+
     // TODO Initialize grid
     // std::cout << img_1.rows << " " << img_1.cols << std::endl;
     int grid_c_size = 16;
@@ -46,7 +46,7 @@ int main( int argc, char** argv )
     int img_w = img_1.cols;
     bool grid[grid_r_size][grid_c_size];
 
-    for ( auto kp:kps ) 
+    for ( auto kp:kps )
     {
         // map image coordinates to grid
         int pt_x = round(kp.pt.x / img_w * grid_c_size);
@@ -70,13 +70,39 @@ int main( int argc, char** argv )
     vector<unsigned char> backward_status;
     vector<float> error;
 
-    // forward
+    Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2);
+	for (size_t i = 0; i < prev_keypoints.size(); i++) {
+		prev_kpts_mat.at<Vec2f>(0, i)[0] = prev_keypoints[i].x;
+		prev_kpts_mat.at<Vec2f>(0, i)[1] = prev_keypoints[i].y;
+	}
+
+    GpuMat d_frame0(img_1);
+    GpuMat d_frame1(img_2);
+    GpuMat d_prevPts(prev_kpts_mat);
+    GpuMat d_nextPts;
+    GpuMat d_backPts;
+    GpuMat d_status;
+    GpuMat d_back_status;
+    PyrLKOpticalFlow d_pyrLK;
+
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+
+    // // ====== CPU Version =======
+    // // forward
+    // cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
+    // // backward
+    // cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
+
+    // ====== GPU Version =======
     // forward
-    cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
+    d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
+    downloadpts(d_nextPts, next_keypoints);
+	downloadmask(d_status, forward_status);
     // backward
-    cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
-    
+	d_pyrLK.sparse(d_frame1, d_frame0, d_nextPts, d_backPts, d_back_status);
+	downloadpts(d_backPts, back_keypoints);
+	downloadmask(d_back_status, backward_status);
+
     for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
         double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
         if (pt_dist < 0.01 && forward_status[idx] && backward_status[idx]) {
