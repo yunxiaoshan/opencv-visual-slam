@@ -78,13 +78,13 @@ int main( int argc, char** argv )
 		prev_kpts_mat.at<Vec2f>(0, i)[1] = prev_keypoints[i].y;
 	}
 
-    cv::cuda::GpuMat d_frame0(img_1);
-    cv::cuda::GpuMat d_frame1(img_2);
-    cv::cuda::GpuMat d_prevPts(prev_kpts_mat);
-    cv::cuda::GpuMat d_nextPts;
-    cv::cuda::GpuMat d_backPts;
-    cv::cuda::GpuMat d_status;
-    cv::cuda::GpuMat d_back_status;
+    cv::gpu::GpuMat d_frame0(img_1);
+    cv::gpu::GpuMat d_frame1(img_2);
+    cv::gpu::GpuMat d_prevPts(prev_kpts_mat);
+    cv::gpu::GpuMat d_nextPts;
+    cv::gpu::GpuMat d_backPts;
+    cv::gpu::GpuMat d_status;
+    cv::gpu::GpuMat d_back_status;
     PyrLKOpticalFlow d_pyrLK;
 
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
