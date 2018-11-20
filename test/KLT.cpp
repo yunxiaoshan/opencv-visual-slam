@@ -50,14 +50,58 @@ int main( int argc, char** argv )
 
     std::string detectorType = "Feature2D.BRISK";
 
-    // ===== CPU Version ====
+    // // =============================== Start of CPU Version ===============================
     // vector<cv::KeyPoint> kps;
     //
     // Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
     // detector->set("thres", 100);
     // detector->detect( img_1, kps );
+    //
+    // int grid_c_num = 10;
+    // int grid_r_num = 10;
+    // int img_h = img_1.size().height;
+    // int img_w = img_1.size().width;
+    // bool grid[grid_r_num][grid_c_num];
+    //
+    // for ( auto kp:kps )
+    // {
+    //     map image coordinates to grid
+    //     int pt_x = round(kp.pt.x / img_w * grid_c_num);
+    //     int pt_y = round(kp.pt.y / img_h * grid_r_num);
+    //     if (!grid[pt_y][pt_x]) {
+    //         keypoints.push_back( kp.pt );
+    //         grid[pt_y][pt_x] = true;
+    //     }
+    // }
+    //
+    // vector<cv::Point2f> next_keypoints;
+    // vector<cv::Point2f> prev_keypoints;
+    // vector<cv::Point2f> back_keypoints;
+    //
+    // vector<cv::Point2f> img1_keypoints;
+    // vector<cv::Point2f> img2_keypoints;
+    // for ( auto kp:keypoints )
+    //     prev_keypoints.push_back(kp);
+    // vector<unsigned char> forward_status;
+    // vector<unsigned char> backward_status;
+    // vector<float> error;
+    // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    //
+    // // forward
+    // cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
+    // // backward
+    // cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
+    //
+    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
+    // cout<<"LK Flow use time："<<time_used.count()<<" seconds."<<endl;
+    // 
+    // // =============================== End of CPU Version ===============================
 
-    // ===== GPU Version ====
+
+
+
+    // =============================== Start of GPU Version ===============================
     // Pump up to GPU
     cv::gpu::GpuMat d_frame_0(img_1);
     cv::gpu::GpuMat d_curr_pts;
@@ -68,28 +112,19 @@ int main( int argc, char** argv )
     vector<Point2f> kps(d_curr_pts.cols);
     download(d_curr_pts, kps);
 
-
-    // TODO Initialize grid in jetson board
-    // std::cout << img_1.rows << " " << img_1.cols << std::endl
+    // Initialize grid in jetson board
     int grid_c_num = 10;
     int grid_r_num = 10;
     int img_h = img_1.size().height;
     int img_w = img_1.size().width;
-    double grid_c_w = (double) img_h / grid_c_num;
-    double grid_r_h = (double) img_w / grid_r_num;
     bool grid[grid_r_num][grid_c_num];
 
     for ( auto kp:kps )
     {
         // map image coordinates to grid
-        // int pt_x = round(kp.pt.x / img_w * grid_c_num);
-        // int pt_y = round(kp.pt.y / img_h * grid_r_num);
         int pt_x = round(kp.x / img_w * grid_c_num);
         int pt_y = round(kp.y / img_h * grid_r_num);
-
         if (!grid[pt_y][pt_x]) {
-            // std::cout << kp.pt << std::endl;
-            // keypoints.push_back( kp.pt );
             keypoints.push_back(kp);
             grid[pt_y][pt_x] = true;
         }
@@ -120,13 +155,6 @@ int main( int argc, char** argv )
 
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
-    // // ====== CPU Version =======
-    // // forward
-    // cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
-    // // backward
-    // cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
-
-    // ====== GPU Version =======
     // forward
     d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
     download(d_nextPts, next_keypoints);
@@ -147,6 +175,11 @@ int main( int argc, char** argv )
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
     cout<<"LK Flow use time："<<time_used.count()<<" seconds."<<endl;
+
+    // =============================== End of GPU Version ===============================
+
+
+
 
     // visualize all  keypoints
     hconcat(img_1,img_2,img_1);
