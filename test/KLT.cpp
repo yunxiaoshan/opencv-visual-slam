@@ -65,7 +65,7 @@ int main( int argc, char** argv )
 
     for ( auto kp:kps )
     {
-        map image coordinates to grid
+        //map image coordinates to grid
         int pt_x = round(kp.pt.x / img_w * grid_c_num);
         int pt_y = round(kp.pt.y / img_h * grid_r_num);
         if (!grid[pt_y][pt_x]) {
@@ -91,6 +91,14 @@ int main( int argc, char** argv )
     cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
     // backward
     cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
+
+    for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
+        double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
+        if (pt_dist < 0.1 && forward_status[idx] && backward_status[idx]) {
+            img1_keypoints.push_back(prev_keypoints[idx]);
+            img2_keypoints.push_back(next_keypoints[idx]);
+        }
+    }
 
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
