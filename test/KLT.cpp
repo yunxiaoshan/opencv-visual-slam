@@ -47,11 +47,12 @@ int main( int argc, char** argv )
     Mat img_2 = imread ( argv[2], CV_LOAD_IMAGE_COLOR );
 
     list< cv::Point2f > keypoints;
-    vector<cv::KeyPoint> kps;
 
     std::string detectorType = "Feature2D.BRISK";
 
     // ===== CPU Version ====
+    // vector<cv::KeyPoint> kps;
+    //
     // Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
     // detector->set("thres", 100);
     // detector->detect( img_1, kps );
@@ -79,11 +80,15 @@ int main( int argc, char** argv )
     for ( auto kp:kps )
     {
         // map image coordinates to grid
-        int pt_x = round(kp.pt.x / img_w * grid_c_size);
-        int pt_y = round(kp.pt.y / img_h * grid_r_size);
+        // int pt_x = round(kp.pt.x / img_w * grid_c_size);
+        // int pt_y = round(kp.pt.y / img_h * grid_r_size);
+        int pt_x = round(kp.x / img_w * grid_c_size);
+        int pt_y = round(kp.y / img_h * grid_r_size);
+
         if (!grid[pt_y][pt_x]) {
-            std::cout << kp.pt << std::endl;
-            keypoints.push_back( kp.pt );
+            // std::cout << kp.pt << std::endl;
+            // keypoints.push_back( kp.pt );
+            keypoints.push_back(kp);
             grid[pt_y][pt_x] = true;
         }
     }
@@ -131,7 +136,7 @@ int main( int argc, char** argv )
 
     for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
         double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
-        if (pt_dist < 1 && forward_status[idx] && backward_status[idx]) {
+        if (pt_dist < 0.1 && forward_status[idx] && backward_status[idx]) {
             img1_keypoints.push_back(prev_keypoints[idx]);
             img2_keypoints.push_back(next_keypoints[idx]);
         }
