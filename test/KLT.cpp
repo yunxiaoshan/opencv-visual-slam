@@ -50,11 +50,23 @@ int main( int argc, char** argv )
     vector<cv::KeyPoint> kps;
 
     std::string detectorType = "Feature2D.BRISK";
-    Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
-	detector->set("thres", 100);
 
+    // ===== CPU Version ====
+    // Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
+    // detector->set("thres", 100);
+    // detector->detect( img_1, kps );
 
-    detector->detect( img_1, kps );
+    // ===== GPU Version ====
+    // Pump up to GPU
+    cv::gpu::GpuMat d_frame_0(img_1);
+    cv::gpu::GpuMat d_curr_pts;
+    cv::gpu::GoodFeaturesToTrackDetector_GPU gpu_detector = GoodFeaturesToTrackDetector_GPU(250, 0.01, 0);
+    gpu_detector(d_frame_0, d_curr_pts);
+
+    // Save detected points
+    vector<Point2f> kps(d_curr_pts.cols);
+    download(d_curr_pts, kps);
+
 
     // TODO Initialize grid in jetson board
     // std::cout << img_1.rows << " " << img_1.cols << std::endl;
@@ -88,11 +100,7 @@ int main( int argc, char** argv )
     vector<unsigned char> backward_status;
     vector<float> error;
 
-    Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2);
-	for (size_t i = 0; i < prev_keypoints.size(); i++) {
-		prev_kpts_mat.at<Vec2f>(0, i)[0] = prev_keypoints[i].x;
-		prev_kpts_mat.at<Vec2f>(0, i)[1] = prev_keypoints[i].y;
-	}
+    Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2, (void*)&prev_keypoints[0]);
 
     cv::gpu::GpuMat d_frame0(img_1);
     cv::gpu::GpuMat d_frame1(img_2);
@@ -123,7 +131,7 @@ int main( int argc, char** argv )
 
     for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
         double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
-        if (pt_dist < 0.01 && forward_status[idx] && backward_status[idx]) {
+        if (pt_dist < 1 && forward_status[idx] && backward_status[idx]) {
             img1_keypoints.push_back(prev_keypoints[idx]);
             img2_keypoints.push_back(next_keypoints[idx]);
         }
