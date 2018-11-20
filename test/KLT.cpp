@@ -50,6 +50,8 @@ int main( int argc, char** argv )
 
     std::string detectorType = "Feature2D.BRISK";
 
+    float threshold = 0.05;
+
     // =============================== Start of CPU Version ===============================
     vector<cv::KeyPoint> kps;
 
@@ -126,7 +128,6 @@ int main( int argc, char** argv )
     // int img_h = img_1.size().height;
     // int img_w = img_1.size().width;
     // bool grid[grid_r_num][grid_c_num];
-    // float threshold = 0.05;
     //
     // for ( auto kp:kps )
     // {
