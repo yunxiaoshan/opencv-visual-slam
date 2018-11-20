@@ -154,14 +154,14 @@ int main( int argc, char** argv )
 
     Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2, (void*)&prev_keypoints[0]);
 
-    cv::gpu::GpuMat d_frame0(img_1);
-    cv::gpu::GpuMat d_frame1(img_2);
-    cv::gpu::GpuMat d_prevPts(prev_kpts_mat);
-    cv::gpu::GpuMat d_nextPts;
-    cv::gpu::GpuMat d_backPts;
-    cv::gpu::GpuMat d_status;
-    cv::gpu::GpuMat d_back_status;
-    cv::gpu::PyrLKOpticalFlow d_pyrLK;
+    GpuMat d_frame0(img_1);
+    GpuMat d_frame1(img_2);
+    GpuMat d_prevPts(prev_kpts_mat);
+    GpuMat d_nextPts;
+    GpuMat d_backPts;
+    GpuMat d_status;
+    GpuMat d_back_status;
+    PyrLKOpticalFlow d_pyrLK;
 
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
