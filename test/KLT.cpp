@@ -52,77 +52,13 @@ int main( int argc, char** argv )
 
     float threshold = 0.05;
 
-    // =============================== Start of CPU Version ===============================
-    vector<cv::KeyPoint> kps;
-
-    Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
-    detector->set("thres", 100);
-    detector->detect( img_1, kps );
-
-    int grid_c_num = 10;
-    int grid_r_num = 10;
-    int img_h = img_1.size().height;
-    int img_w = img_1.size().width;
-    bool grid[grid_r_num][grid_c_num];
-
-    for ( auto kp:kps )
-    {
-        //map image coordinates to grid
-        int pt_x = round(kp.pt.x / img_w * grid_c_num);
-        int pt_y = round(kp.pt.y / img_h * grid_r_num);
-        if (!grid[pt_y][pt_x]) {
-            keypoints.push_back( kp.pt );
-            grid[pt_y][pt_x] = true;
-        }
-    }
-
-    vector<cv::Point2f> next_keypoints;
-    vector<cv::Point2f> prev_keypoints;
-    vector<cv::Point2f> back_keypoints;
-
-    vector<cv::Point2f> img1_keypoints;
-    vector<cv::Point2f> img2_keypoints;
-    for ( auto kp:keypoints )
-        prev_keypoints.push_back(kp);
-    vector<unsigned char> forward_status;
-    vector<unsigned char> backward_status;
-    vector<float> error;
-    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-
-    // forward
-    cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
-    // backward
-    cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
-
-    for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
-        double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
-        if (pt_dist < threshold && forward_status[idx] && backward_status[idx]) {
-            img1_keypoints.push_back(prev_keypoints[idx]);
-            img2_keypoints.push_back(next_keypoints[idx]);
-        }
-    }
-
-    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
-    chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
-    cout<<"LK Flow use time："<<time_used.count()<<" seconds."<<endl;
-
-    // =============================== End of CPU Version ===============================
-
-
-
-
-    // // =============================== Start of GPU Version ===============================
-    // // Pump up to GPU
-    // cv::gpu::GpuMat d_frame_0(img_1);
-    // cv::gpu::GpuMat d_curr_pts;
-    // cv::gpu::GoodFeaturesToTrackDetector_GPU gpu_detector = GoodFeaturesToTrackDetector_GPU(250, 0.01, 0);
-    // gpu_detector(d_frame_0, d_curr_pts);
+    // // =============================== Start of CPU Version ===============================
+    // vector<cv::KeyPoint> kps;
     //
-    // // Save detected points
-    // vector<Point2f> kps(d_curr_pts.cols);
-    // download(d_curr_pts, kps);
+    // Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
+    // detector->set("thres", 100);
+    // detector->detect( img_1, kps );
     //
-    // // Initialize grid in jetson board
     // int grid_c_num = 10;
     // int grid_r_num = 10;
     // int img_h = img_1.size().height;
@@ -131,11 +67,11 @@ int main( int argc, char** argv )
     //
     // for ( auto kp:kps )
     // {
-    //     // map image coordinates to grid
-    //     int pt_x = round(kp.x / img_w * grid_c_num);
-    //     int pt_y = round(kp.y / img_h * grid_r_num);
+    //     //map image coordinates to grid
+    //     int pt_x = round(kp.pt.x / img_w * grid_c_num);
+    //     int pt_y = round(kp.pt.y / img_h * grid_r_num);
     //     if (!grid[pt_y][pt_x]) {
-    //         keypoints.push_back(kp);
+    //         keypoints.push_back( kp.pt );
     //         grid[pt_y][pt_x] = true;
     //     }
     // }
@@ -151,31 +87,12 @@ int main( int argc, char** argv )
     // vector<unsigned char> forward_status;
     // vector<unsigned char> backward_status;
     // vector<float> error;
-    //
-    // Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2, (void*)&prev_keypoints[0]);
-    //
-    // GpuMat d_frame0(img_1);
-    // GpuMat d_frame1(img_2);
-    // GpuMat d_prevPts(prev_kpts_mat);
-    // GpuMat d_nextPts;
-    // GpuMat d_backPts;
-    // GpuMat d_status;
-    // GpuMat d_back_status;
-    // PyrLKOpticalFlow d_pyrLK;
-    //
     // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     //
     // // forward
-    // d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
+    // cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
     // // backward
-	// d_pyrLK.sparse(d_frame1, d_frame0, d_nextPts, d_backPts, d_back_status);
-    //
-    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
-    // // download
-    // download(d_nextPts, next_keypoints);
-    // download(d_status, forward_status);
-	// download(d_backPts, back_keypoints);
-	// download(d_back_status, backward_status);
+    // cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
     //
     // for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
     //     double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
@@ -185,13 +102,98 @@ int main( int argc, char** argv )
     //     }
     // }
     //
-    // chrono::steady_clock::time_point t3 = chrono::steady_clock::now();
-    // chrono::duration<double> time_used_algo = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
-    // chrono::duration<double> time_used_down = chrono::duration_cast<chrono::duration<double>>( t3-t1 );
-    // cout<<"LK Flow use time："<<time_used_algo.count()<<" seconds."<<endl;
-    // cout<<"LK Flow including variable donwloading use time："<<time_used_down.count()<<" seconds."<<endl;
+    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
+    // cout<<"LK Flow use time："<<time_used.count()<<" seconds."<<endl;
+    // cout<<"LK Flow final number of points："<<img2_keypoints.size()<<" with threshold of " <<threshold<<"."<<endl;
     //
-    // // =============================== End of GPU Version ===============================
+    // // =============================== End of CPU Version ===============================
+
+
+
+
+    // =============================== Start of GPU Version ===============================
+    // Pump up to GPU
+    cv::gpu::GpuMat d_frame_0(img_1);
+    cv::gpu::GpuMat d_curr_pts;
+    cv::gpu::GoodFeaturesToTrackDetector_GPU gpu_detector = GoodFeaturesToTrackDetector_GPU(250, 0.01, 0);
+    gpu_detector(d_frame_0, d_curr_pts);
+
+    // Save detected points
+    vector<Point2f> kps(d_curr_pts.cols);
+    download(d_curr_pts, kps);
+
+    // Initialize grid in jetson board
+    int grid_c_num = 10;
+    int grid_r_num = 10;
+    int img_h = img_1.size().height;
+    int img_w = img_1.size().width;
+    bool grid[grid_r_num][grid_c_num];
+
+    for ( auto kp:kps )
+    {
+        // map image coordinates to grid
+        int pt_x = round(kp.x / img_w * grid_c_num);
+        int pt_y = round(kp.y / img_h * grid_r_num);
+        if (!grid[pt_y][pt_x]) {
+            keypoints.push_back(kp);
+            grid[pt_y][pt_x] = true;
+        }
+    }
+
+    vector<cv::Point2f> next_keypoints;
+    vector<cv::Point2f> prev_keypoints;
+    vector<cv::Point2f> back_keypoints;
+
+    vector<cv::Point2f> img1_keypoints;
+    vector<cv::Point2f> img2_keypoints;
+    for ( auto kp:keypoints )
+        prev_keypoints.push_back(kp);
+    vector<unsigned char> forward_status;
+    vector<unsigned char> backward_status;
+    vector<float> error;
+
+    Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2, (void*)&prev_keypoints[0]);
+
+    GpuMat d_frame0(img_1);
+    GpuMat d_frame1(img_2);
+    GpuMat d_prevPts(prev_kpts_mat);
+    GpuMat d_nextPts;
+    GpuMat d_backPts;
+    GpuMat d_status;
+    GpuMat d_back_status;
+    PyrLKOpticalFlow d_pyrLK;
+
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+
+    // forward
+    d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
+    // backward
+	d_pyrLK.sparse(d_frame1, d_frame0, d_nextPts, d_backPts, d_back_status);
+
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    // download
+    download(d_nextPts, next_keypoints);
+    download(d_status, forward_status);
+	download(d_backPts, back_keypoints);
+	download(d_back_status, backward_status);
+
+    for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
+        double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
+        if (pt_dist < threshold && forward_status[idx] && backward_status[idx]) {
+            img1_keypoints.push_back(prev_keypoints[idx]);
+            img2_keypoints.push_back(next_keypoints[idx]);
+        }
+    }
+
+    chrono::steady_clock::time_point t3 = chrono::steady_clock::now();
+    chrono::duration<double> time_used_algo = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
+    chrono::duration<double> time_used_down = chrono::duration_cast<chrono::duration<double>>( t3-t1 );
+    cout<<"LK Flow final number of points："<<img2_keypoints.size()<<" with threshold of " <<threshold<<"."<<endl;
+    cout<<"LK Flow use time："<<time_used_algo.count()<<" seconds."<<endl;
+    cout<<"LK Flow including variable donwloading use time："<<time_used_down.count()<<" seconds."<<endl;
+
+    // =============================== End of GPU Version ===============================
 
 
 
