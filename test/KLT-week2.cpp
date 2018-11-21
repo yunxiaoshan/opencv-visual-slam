@@ -98,12 +98,47 @@ using namespace cv;
 
 cv::Matx33d Findfundamental(vector<cv::Point2f> prev_subset,vector<cv::Point2f> next_subset){
     cv::Matx33d F;
-    //fill the blank
+    // TODO
+    // normalize the points
+
+    // get the points
+    num_vals = 9;
+    // 9 * 9, the last row should be 0
+    cv::Mat W = cv::Mat::zeros(prev_subset.size() + 1, num_vals, CV_32F);
+    for (size_t i = 0; i < prev_subset.size() + 1; i++) {
+        float u1 = prev_subset[i].x;
+        float v1 = prev_subset[i].y;
+        float u2 = next_subset[i].x;
+        float v2 = next_subset[i].y;
+        float curr_point[num_vals] = { u1 * u2, u1 * v2, u1, v1 * u2, v1 * v2, v1, u2, v2, 1.0 };
+        cv::Mat curr_row = cv::Mat(1, num_vals, CV_32F, curr_point);
+        curr_row.row(0).copyTo(W.row(i));
+    }
+
+    cv::SVD svd(W); // get svd.vt, svd.w, svd.u;
+    cv::Mat w;
+    svd.w.copyTo(w);
+    w.at<float>(2) = 0;
+
+    F = svd.u * w * svd.vt;
+
     return F;
 }
-bool checkinlier(cv::Point2f prev_keypoint,cv::Point2f next_keypoint,cv::Matx33d Fcandidate,double d){
-    //fill the blank
-    return false;
+bool checkinlier(cv::Point2f prev_keypoint,cv::Point2f next_keypoint,cv::Matx33d Fcandidate, double d){
+    // TODO
+    float u1 = prev_keypoint.x;
+    float v1 = prev_keypoint.y;
+    float u2 = next_keypoint.x;
+    float v2 = next_keypoint.y;
+
+    // epipolar line 2 to 1
+    cv::Matx33d Fcandidate_t = Fcandidate.t();
+    float a1 = Fcandidate[0] * u2 + Fcandidate[1] * v2 + Fcandidate[2];
+    float b1 = Fcandidate[3] * u2 + Fcandidate[4] * v2 + Fcandidate[5];
+    float c1 = Fcandidate[6] * u2 + Fcandidate[7] * v2 + Fcandidate[8];
+
+    double dist = (double) abs(a1 * u1 + b1 * v1 + c1) / sqrt(a1 * a1 + b1 * b1);
+    return dist <= d;
 }
 
 int main( int argc, char** argv )
@@ -190,8 +225,8 @@ int main( int argc, char** argv )
         Fcandidate = Findfundamental(prev_subset,next_subset);
         // step3: Evaluate inliers, decide if we need to update the best solution
         int inliers = 0;
-        for(size_t j=0;j<prev_keypoints.size();j++){
-            if(checkinlier(prev_keypoints[j],next_keypoints[j],Fcandidate,d))
+        for(size_t j=0;j<kps_prev.size();j++){
+            if(checkinlier(kps_prev[j],kps_next[j],Fcandidate,d))
                 inliers++;
         }
         if(inliers > bestinliers)
@@ -205,7 +240,7 @@ int main( int argc, char** argv )
 
     // step4: After we finish all the iterations, use the inliers of the best model to compute Fundamental matrix again.
 
-    for(size_t j=0;j<prev_keypoints.size();j++){
+    for(size_t j=0;j<kps_prev.size();j++){
         if(checkinlier(kps_prev[j],kps_next[j],F,d))
         {
             prev_subset.push_back(kps_prev[j]);
