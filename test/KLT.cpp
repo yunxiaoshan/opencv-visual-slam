@@ -48,7 +48,7 @@ int main( int argc, char** argv )
 
     list< cv::Point2f > keypoints;
 
-    std::string detectorType = "Feature2D.BRISK";
+    std::string detectorType = "Feature2D.GFTT"; // "Feature2D.BRISK"
 
     float threshold = 0.05;
 
@@ -57,9 +57,9 @@ int main( int argc, char** argv )
 
     chrono::steady_clock::time_point t0 = chrono::steady_clock::now();
     Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
-    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-    detector->set("thres", 100);
+    // detector->set("thres", 100);
     detector->detect( img_1, kps );
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
     int grid_c_num = 10;
     int grid_r_num = 10;
