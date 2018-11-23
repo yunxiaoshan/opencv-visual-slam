@@ -98,44 +98,50 @@ cv::Matx33d Findfundamental(vector<cv::Point2f> prev_subset, vector<cv::Point2f>
 {
     // TODO
     // normalize the points
-    cv::Mat norm = (Mat_<double>(3,3)<<2/img_w, 0, -1, 0, 2/img_h, -1, 0, 0, 1); 
+    cv::Mat norm = (Mat_<double>(3,3)<<2.0/img_w, 0, -1, 0, 2.0/img_h, -1, 0, 0, 1); 
 
     // get the points
     int num_vals = prev_subset.size() + 1;
-    // 9 * 9, the last row should be 0
+    // 8 * 9, the last row should be 0
     cv::Mat W = cv::Mat::zeros(prev_subset.size(), num_vals, CV_64F);
     for (size_t i = 0; i < prev_subset.size(); i++)
     {
         cv::Mat prev = (Mat_<double>(3,1)<<prev_subset[i].x, prev_subset[i].y, 1); 
         cv::Mat next = (Mat_<double>(3,1)<<next_subset[i].x, next_subset[i].y, 1); 
-        cv::Mat prev_norm = norm*prev;
-        cv::Mat next_norm = norm*next;
+
+        cv::Mat prev_norm = norm * prev;
+        cv::Mat next_norm = norm * next;
+
         double u1 = prev_norm.at<double>(0,0);
         double v1 = prev_norm.at<double>(1,0);
         double u2 = next_norm.at<double>(0,0);
         double v2 = next_norm.at<double>(1,0);
         double curr_point[] = {u1 * u2, u1 * v2, u1, v1 * u2, v1 * v2, v1, u2, v2, 1.0};
         cv::Mat curr_row = cv::Mat(1, num_vals, CV_64F, curr_point);
-        curr_row(0).copyTo(W.row(i));
+        curr_row.copyTo(W.row(i));
     }
+
     // first SVD
     cv::SVD svd1(W); // get svd.vt, svd.w, svd.u;
 
     // second SVD
-    cv::Mat e_hat;
+    cv::Mat e_hat = cv::Mat(3, 3, CV_64F);
 
     for (int i = 0; i < 9; i++)
     {
-        e_hat.at<double>(i%3, i/3) = svd1.vt.at<double>((num_vals - 1), i);
+        e_hat.at<double>(i/3, i%3) = svd1.vt.at<double>((num_vals - 2), i);
     }
+
     cv::SVD svd2(e_hat);
     cv::Mat w;
     svd2.w.copyTo(w);
+    
     cv::Mat w_hat = cv::Mat::zeros(3,3, CV_64F);
     w_hat.at<double>(0, 0) = w.at<double>(0, 0);
     w_hat.at<double>(1, 1) = w.at<double>(1, 0);
 
     cv::Mat F_hat = svd2.u * w_hat * svd2.vt;
+
     // TODO
     // denormalize points
     cv::Mat F_norm = norm.t()*F_hat*norm;
@@ -152,11 +158,13 @@ bool checkinlier(cv::Point2f prev_keypoint, cv::Point2f next_keypoint, cv::Matx3
 
     // epipolar line 1 to 2
     cv::Matx33d Fcandidate_t = Fcandidate.t();
+    // cout << "F transpose " << Fcandidate_t << endl;
     double a2 = Fcandidate_t(0, 0) * u1 + Fcandidate_t(0, 1) * v1 + Fcandidate_t(0, 2);
-    double b2 = Fcandidate_t(1, 0) * u2 + Fcandidate_t(1, 1) * v2 + Fcandidate_t(1, 2);
-    double c2 = Fcandidate_t(2, 0) * u2 + Fcandidate_t(2, 1) * v2 + Fcandidate_t(2, 2);
+    double b2 = Fcandidate_t(1, 0) * u1 + Fcandidate_t(1, 1) * v1 + Fcandidate_t(1, 2);
+    double c2 = Fcandidate_t(2, 0) * u1 + Fcandidate_t(2, 1) * v1 + Fcandidate_t(2, 2);
 
-    double dist = (double)abs(a2 * u1 + b2 * v1 + c2) / sqrt(a2 * a2 + b2 * b2);
+    double dist = (double)abs(a2 * u2 + b2 * v2 + c2) / sqrt(a2 * a2 + b2 * b2);
+    cout << "dist " << dist << endl;
     return dist <= d;
 }
 
@@ -273,7 +281,10 @@ int main(int argc, char **argv)
             next_subset.push_back(kps_next[j]);
         }
     }
-    F = Findfundamental(prev_subset, next_subset);
+	cout << kps_prev.size()<< endl;
+	cout << next_subset.size()<< endl;
+
+    F = Findfundamental(prev_subset, next_subset, img_w, img_h);
 
     cout << "Fundamental matrix is \n"
          << F << endl;
