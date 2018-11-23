@@ -1,3 +1,78 @@
+////
+//// Created by sicong on 08/11/18.
+////
+//
+//#include <iostream>
+//#include <fstream>
+//#include <list>
+//#include <vector>
+//#include <chrono>
+//using namespace std;
+//
+//
+//#include <opencv2/core/core.hpp>
+//#include <opencv2/highgui/highgui.hpp>
+//#include <opencv2/features2d/features2d.hpp>
+//#include <opencv2/video/tracking.hpp>
+//
+//using namespace cv;
+//int main( int argc, char** argv )
+//{
+//
+//    if ( argc != 3 )
+//    {
+//        cout<<"usage: feature_extraction img1 img2"<<endl;
+//        return 1;
+//    }
+//    //-- Read two images
+//    Mat img_1 = imread ( argv[1], CV_LOAD_IMAGE_COLOR );
+//    Mat img_2 = imread ( argv[2], CV_LOAD_IMAGE_COLOR );
+//
+//    list< cv::Point2f > keypoints;
+//    vector<cv::KeyPoint> kps;
+//
+//    std::string detectorType = "Feature2D.BRISK";
+//    Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
+//	detector->set("thres", 100);
+//
+//
+//    detector->detect( img_1, kps );
+//    for ( auto kp:kps )
+//        keypoints.push_back( kp.pt );
+//
+//    vector<cv::Point2f> next_keypoints;
+//    vector<cv::Point2f> prev_keypoints;
+//    for ( auto kp:keypoints )
+//        prev_keypoints.push_back(kp);
+//    vector<unsigned char> status;
+//    vector<float> error;
+//    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+//    cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, status, error );
+//    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+//    chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
+//    cout<<"LK Flow use time："<<time_used.count()<<" seconds."<<endl;
+//
+//    // visualize all  keypoints
+//    hconcat(img_1,img_2,img_1);
+//    for ( int i=0; i< prev_keypoints.size() ;i++)
+//    {
+//        cout<<(int)status[i]<<endl;
+//        if(status[i] == 1)
+//        {
+//            Point pt;
+//            pt.x =  next_keypoints[i].x + img_2.size[1];
+//            pt.y =  next_keypoints[i].y;
+//
+//            line(img_1, prev_keypoints[i], pt, cv::Scalar(0,255,255));
+//        }
+//    }
+//
+//    cv::imshow("klt tracker", img_1);
+//    cv::waitKey(0);
+//
+//    return 0;
+//}
+
 //
 // Created by sicong on 08/11/18.
 //
@@ -6,224 +81,201 @@
 #include <fstream>
 #include <list>
 #include <vector>
+#include <ctime>
 #include <chrono>
+#include <unordered_set>
+#include <math.h>
 using namespace std;
-
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/video/tracking.hpp>
-#include <opencv2/gpu/gpu.hpp>
-
 
 using namespace cv;
-using namespace cv::gpu;
 
-static void download(const GpuMat& d_mat, vector<Point2f>& vec)
+cv::Matx33d Findfundamental(vector<cv::Point2f> prev_subset, vector<cv::Point2f> next_subset,int img_w, int img_h)
 {
-    vec.resize(d_mat.cols);
-    Mat mat(1, d_mat.cols, CV_32FC2, (void*)&vec[0]);
-    d_mat.download(mat);
-}
+    // TODO
+    // normalize the points
+    cv::Mat norm = (Mat_<double>(3,3)<<2/img_w, 0, -1, 0, 2/img_h, -1, 0, 0, 1); 
 
-static void download(const GpuMat& d_mat, vector<uchar>& vec)
-{
-    vec.resize(d_mat.cols);
-    Mat mat(1, d_mat.cols, CV_8UC1, (void*)&vec[0]);
-    d_mat.download(mat);
-}
-
-int main( int argc, char** argv )
-{
-
-    if ( argc != 3 )
+    // get the points
+    int num_vals = prev_subset.size() + 1;
+    // 9 * 9, the last row should be 0
+    cv::Mat W = cv::Mat::zeros(prev_subset.size(), num_vals, CV_64F);
+    for (size_t i = 0; i < prev_subset.size(); i++)
     {
-        cout<<"usage: feature_extraction img1 img2"<<endl;
+        cv::Mat prev = (Mat_<double>(3,1)<<prev_subset[i].x, prev_subset[i].y, 1); 
+        cv::Mat next = (Mat_<double>(3,1)<<next_subset[i].x, next_subset[i].y, 1); 
+        cv::Mat prev_norm = norm*prev;
+        cv::Mat next_norm = norm*next;
+        double u1 = prev_norm.at<double>(0,0);
+        double v1 = prev_norm.at<double>(1,0);
+        double u2 = next_norm.at<double>(0,0);
+        double v2 = next_norm.at<double>(1,0);
+        double curr_point[] = {u1 * u2, u1 * v2, u1, v1 * u2, v1 * v2, v1, u2, v2, 1.0};
+        cv::Mat curr_row = cv::Mat(1, num_vals, CV_64F, curr_point);
+        curr_row(0).copyTo(W.row(i));
+    }
+    // first SVD
+    cv::SVD svd1(W); // get svd.vt, svd.w, svd.u;
+
+    // second SVD
+    cv::Mat e_hat;
+
+    for (int i = 0; i < 9; i++)
+    {
+        e_hat.at<double>(i%3, i/3) = svd1.vt.at<double>((num_vals - 1), i);
+    }
+    cv::SVD svd2(e_hat);
+    cv::Mat w;
+    svd2.w.copyTo(w);
+    cv::Mat w_hat = cv::Mat::zeros(3,3, CV_64F);
+    w_hat.at<double>(0, 0) = w.at<double>(0, 0);
+    w_hat.at<double>(1, 1) = w.at<double>(1, 0);
+
+    cv::Mat F_hat = svd2.u * w_hat * svd2.vt;
+    // TODO
+    // denormalize points
+    cv::Mat F_norm = norm.t()*F_hat*norm;
+    cv::Matx33d F((double *)F_norm.clone().ptr());
+
+    return F;
+}
+bool checkinlier(cv::Point2f prev_keypoint, cv::Point2f next_keypoint, cv::Matx33d Fcandidate, double d)
+{
+    double u1 = prev_keypoint.x;
+    double v1 = prev_keypoint.y;
+    double u2 = next_keypoint.x;
+    double v2 = next_keypoint.y;
+
+    // epipolar line 1 to 2
+    cv::Matx33d Fcandidate_t = Fcandidate.t();
+    double a2 = Fcandidate_t(0, 0) * u1 + Fcandidate_t(0, 1) * v1 + Fcandidate_t(0, 2);
+    double b2 = Fcandidate_t(1, 0) * u2 + Fcandidate_t(1, 1) * v2 + Fcandidate_t(1, 2);
+    double c2 = Fcandidate_t(2, 0) * u2 + Fcandidate_t(2, 1) * v2 + Fcandidate_t(2, 2);
+
+    double dist = (double)abs(a2 * u1 + b2 * v1 + c2) / sqrt(a2 * a2 + b2 * b2);
+    return dist <= d;
+}
+
+int main(int argc, char **argv)
+{
+
+    srand(time(NULL));
+
+    if (argc != 3)
+    {
+        cout << "usage: feature_extraction img1 img2" << endl;
         return 1;
     }
     //-- Read two images
-    Mat img_1 = imread ( argv[1], CV_LOAD_IMAGE_COLOR );
-    Mat img_2 = imread ( argv[2], CV_LOAD_IMAGE_COLOR );
+    Mat img_1 = imread(argv[1], CV_LOAD_IMAGE_COLOR);
+    Mat img_2 = imread(argv[2], CV_LOAD_IMAGE_COLOR);
 
-    list< cv::Point2f > keypoints;
-
-    float threshold = 0.05;
-
-    // // =============================== Start of CPU Version ===============================
-    // std::string detectorType = "Feature2D.GFTT"; // "Feature2D.BRISK"
-    // vector<cv::KeyPoint> kps;
-    //
-    // chrono::steady_clock::time_point t0 = chrono::steady_clock::now();
-    // Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
-    // // detector->set("thres", 100);
-    // detector->detect( img_1, kps );
-    // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-    //
-    // int grid_c_num = 10;
-    // int grid_r_num = 10;
-    // int img_h = img_1.size().height;
-    // int img_w = img_1.size().width;
-    // bool grid[grid_r_num][grid_c_num];
-    //
-    // for ( auto kp:kps )
-    // {
-    //     //map image coordinates to grid
-    //     int pt_x = round(kp.pt.x / img_w * grid_c_num);
-    //     int pt_y = round(kp.pt.y / img_h * grid_r_num);
-    //     if (!grid[pt_y][pt_x]) {
-    //         keypoints.push_back( kp.pt );
-    //         grid[pt_y][pt_x] = true;
-    //     }
-    // }
-    //
-    // vector<cv::Point2f> next_keypoints;
-    // vector<cv::Point2f> prev_keypoints;
-    // vector<cv::Point2f> back_keypoints;
-    //
-    // vector<cv::Point2f> img1_keypoints;
-    // vector<cv::Point2f> img2_keypoints;
-    // for ( auto kp:keypoints )
-    //     prev_keypoints.push_back(kp);
-    // vector<unsigned char> forward_status;
-    // vector<unsigned char> backward_status;
-    // vector<float> error;
-    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
-    //
-    // // forward
-    // cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
-    // // backward
-    // cv::calcOpticalFlowPyrLK( img_2, img_1, next_keypoints, back_keypoints, backward_status, error );
-    //
-    // for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
-    //     double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
-    //     if (pt_dist < threshold && forward_status[idx] && backward_status[idx]) {
-    //         img1_keypoints.push_back(prev_keypoints[idx]);
-    //         img2_keypoints.push_back(next_keypoints[idx]);
-    //     }
-    // }
-    //
-    // chrono::steady_clock::time_point t3 = chrono::steady_clock::now();
-    // chrono::duration<double> time_used_FD = chrono::duration_cast<chrono::duration<double>>( t1 - t0 );
-    // chrono::duration<double> time_used_KLT = chrono::duration_cast<chrono::duration<double>>( t3 - t2 );
-    // cout<<"FD use time："<<time_used_FD.count()<<" seconds."<<endl;
-    // cout<<"LK Flow use time："<<time_used_KLT.count()<<" seconds."<<endl;
-    // cout<<"LK Flow final number of points："<<img2_keypoints.size()<<" with threshold of " <<threshold<<"."<<endl;
-    //
-    // // =============================== End of CPU Version ===============================
-
-
-
-
-    // =============================== Start of GPU Version ===============================
-    // Pump up to GPU
-    cv::gpu::GpuMat d_frame_0(img_1);
-    cv::gpu::GpuMat d_curr_pts;
-    cv::gpu::GoodFeaturesToTrackDetector_GPU gpu_detector = GoodFeaturesToTrackDetector_GPU(250, 0.01, 0);
-    chrono::steady_clock::time_point t0 = chrono::steady_clock::now();
-    gpu_detector(d_frame_0, d_curr_pts);
-
-    // Save detected points
-    vector<Point2f> kps(d_curr_pts.cols);
-    download(d_curr_pts, kps);
-    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-
-    // Initialize grid in jetson board
-    int grid_c_num = 10;
-    int grid_r_num = 10;
-    int img_h = img_1.size().height;
+    // Get input img size
     int img_w = img_1.size().width;
-    bool grid[grid_r_num][grid_c_num];
+    int img_h = img_1.size().height;
 
-    for ( auto kp:kps )
-    {
-        // map image coordinates to grid
-        int pt_x = round(kp.x / img_w * grid_c_num);
-        int pt_y = round(kp.y / img_h * grid_r_num);
-        if (!grid[pt_y][pt_x]) {
-            keypoints.push_back(kp);
-            grid[pt_y][pt_x] = true;
-        }
-    }
+    list<cv::Point2f> keypoints;
+    vector<cv::KeyPoint> kps;
+
+    std::string detectorType = "Feature2D.BRISK";
+    Ptr<FeatureDetector> detector = Algorithm::create<FeatureDetector>(detectorType);
+    detector->set("thres", 100);
+
+    detector->detect(img_1, kps);
+    for (auto kp : kps)
+        keypoints.push_back(kp.pt);
 
     vector<cv::Point2f> next_keypoints;
     vector<cv::Point2f> prev_keypoints;
-    vector<cv::Point2f> back_keypoints;
-
-    vector<cv::Point2f> img1_keypoints;
-    vector<cv::Point2f> img2_keypoints;
-    for ( auto kp:keypoints )
+    for (auto kp : keypoints)
         prev_keypoints.push_back(kp);
-    vector<unsigned char> forward_status;
-    vector<unsigned char> backward_status;
+    vector<unsigned char> status;
     vector<float> error;
-
-    Mat prev_kpts_mat = Mat(1, prev_keypoints.size(), CV_32FC2, (void*)&prev_keypoints[0]);
-
-    GpuMat d_frame0(img_1);
-    GpuMat d_frame1(img_2);
-    GpuMat d_prevPts(prev_kpts_mat);
-    GpuMat d_nextPts;
-    GpuMat d_backPts;
-    GpuMat d_status;
-    GpuMat d_back_status;
-    PyrLKOpticalFlow d_pyrLK;
-
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    cv::calcOpticalFlowPyrLK(img_1, img_2, prev_keypoints, next_keypoints, status, error);
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+    cout << "LK Flow use time：" << time_used.count() << " seconds." << endl;
 
-    // forward
-    d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
-    // backward
-	d_pyrLK.sparse(d_frame1, d_frame0, d_nextPts, d_backPts, d_back_status);
-
-    // download
-    download(d_nextPts, next_keypoints);
-    download(d_status, forward_status);
-	download(d_backPts, back_keypoints);
-	download(d_back_status, backward_status);
-
-    for (size_t idx = 0; idx < next_keypoints.size(); idx++) {
-        double pt_dist = norm(back_keypoints[idx] - prev_keypoints[idx]);
-        if (pt_dist < threshold && forward_status[idx] && backward_status[idx]) {
-            img1_keypoints.push_back(prev_keypoints[idx]);
-            img2_keypoints.push_back(next_keypoints[idx]);
-        }
-    }
-
-    chrono::steady_clock::time_point t3 = chrono::steady_clock::now();
-    chrono::duration<double> time_used_FD = chrono::duration_cast<chrono::duration<double>>( t1 - t0 );
-    chrono::duration<double> time_used_KLT = chrono::duration_cast<chrono::duration<double>>( t3 - t2 );
-    cout<<"FD use time："<<time_used_FD.count()<<" seconds."<<endl;
-    cout<<"LK Flow use time："<<time_used_KLT.count()<<" seconds."<<endl;
-    cout<<"LK Flow including variable donwloading use time："<<time_used_down.count()<<" seconds."<<endl;
-
-    // =============================== End of GPU Version ===============================
-
-
-
-
-    // visualize all  keypoints
-    hconcat(img_1,img_2,img_1);
-    // for ( int i=0; i< prev_keypoints.size() ;i++)
-    for ( unsigned int i=0; i< img1_keypoints.size() ;i++)
+    vector<cv::Point2f> kps_prev, kps_next;
+    kps_prev.clear();
+    kps_next.clear();
+    for (size_t i = 0; i < prev_keypoints.size(); i++)
     {
-        // cout<<(int)forward_status[i]<<endl;
-        if(forward_status[i] == 1)
+        if (status[i] == 1)
         {
-            Point pt;
-            // pt.x =  next_keypoints[i].x + img_2.size[1];
-            // pt.y =  next_keypoints[i].y;
-
-            // line(img_1, prev_keypoints[i], pt, cv::Scalar(0,255,255));
-            pt.x =  img2_keypoints[i].x + img_2.size[1];
-            pt.y =  img2_keypoints[i].y;
-
-            line(img_1, img1_keypoints[i], pt, cv::Scalar(0,255,255));
+            kps_prev.push_back(prev_keypoints[i]);
+            kps_next.push_back(next_keypoints[i]);
         }
     }
 
-    cv::imshow("klt tracker", img_1);
-    cv::waitKey(0);
+    // p Probability that at least one valid set of inliers is chosen
+    // d Tolerated distance from the model for inliers
+    // e Assumed outlier percent in data set.
+    double p = 0.99;
+    double d = 1.5f;
+    double e = 0.2;
 
+    int niter = static_cast<int>(std::ceil(std::log(1.0 - p) / std::log(1.0 - std::pow(1.0 - e, 8))));
+    Mat Fundamental;
+    cv::Matx33d F, Fcandidate;
+    int bestinliers = -1;
+    vector<cv::Point2f> prev_subset, next_subset;
+    int matches = kps_prev.size();
+    prev_subset.clear();
+    next_subset.clear();
+
+    for (int i = 0; i < niter; i++)
+    {
+        // step1: randomly sample 8 matches for 8pt algorithm
+        unordered_set<int> rand_util;
+        while (rand_util.size() < 8)
+        {
+            int randi = rand() % matches;
+            rand_util.insert(randi);
+        }
+        vector<int> random_indices(rand_util.begin(), rand_util.end());
+        for (size_t j = 0; j < rand_util.size(); j++)
+        {
+            prev_subset.push_back(kps_prev[random_indices[j]]);
+            next_subset.push_back(kps_next[random_indices[j]]);
+        }
+        // step2: perform 8pt algorithm, get candidate F
+
+        Fcandidate = Findfundamental(prev_subset, next_subset, img_w, img_h);
+        // step3: Evaluate inliers, decide if we need to update the best solution
+        int inliers = 0;
+        for (size_t j = 0; j < kps_prev.size(); j++)
+        {
+            if (checkinlier(kps_prev[j], kps_next[j], Fcandidate, d))
+                inliers++;
+        }
+        if (inliers > bestinliers)
+        {
+            F = Fcandidate;
+            bestinliers = inliers;
+        }
+        prev_subset.clear();
+        next_subset.clear();
+    }
+
+    // step4: After we finish all the iterations, use the inliers of the best model to compute Fundamental matrix again.
+
+    for (size_t j = 0; j < kps_prev.size(); j++)
+    {
+        if (checkinlier(kps_prev[j], kps_next[j], F, d))
+        {
+            prev_subset.push_back(kps_prev[j]);
+            next_subset.push_back(kps_next[j]);
+        }
+    }
+    F = Findfundamental(prev_subset, next_subset);
+
+    cout << "Fundamental matrix is \n"
+         << F << endl;
     return 0;
 }

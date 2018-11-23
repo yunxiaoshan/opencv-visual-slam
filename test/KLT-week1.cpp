@@ -48,16 +48,17 @@ int main( int argc, char** argv )
 
     list< cv::Point2f > keypoints;
 
-    std::string detectorType = "Feature2D.BRISK";
-
     float threshold = 0.05;
 
     // // =============================== Start of CPU Version ===============================
+    // std::string detectorType = "Feature2D.GFTT"; // "Feature2D.BRISK"
     // vector<cv::KeyPoint> kps;
     //
+    // chrono::steady_clock::time_point t0 = chrono::steady_clock::now();
     // Ptr<FeatureDetector>detector = Algorithm::create<FeatureDetector>(detectorType);
-    // detector->set("thres", 100);
+    // // detector->set("thres", 100);
     // detector->detect( img_1, kps );
+    // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     //
     // int grid_c_num = 10;
     // int grid_r_num = 10;
@@ -87,7 +88,7 @@ int main( int argc, char** argv )
     // vector<unsigned char> forward_status;
     // vector<unsigned char> backward_status;
     // vector<float> error;
-    // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     //
     // // forward
     // cv::calcOpticalFlowPyrLK( img_1, img_2, prev_keypoints, next_keypoints, forward_status, error );
@@ -102,9 +103,11 @@ int main( int argc, char** argv )
     //     }
     // }
     //
-    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
-    // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
-    // cout<<"LK Flow use time："<<time_used.count()<<" seconds."<<endl;
+    // chrono::steady_clock::time_point t3 = chrono::steady_clock::now();
+    // chrono::duration<double> time_used_FD = chrono::duration_cast<chrono::duration<double>>( t1 - t0 );
+    // chrono::duration<double> time_used_KLT = chrono::duration_cast<chrono::duration<double>>( t3 - t2 );
+    // cout<<"FD use time："<<time_used_FD.count()<<" seconds."<<endl;
+    // cout<<"LK Flow use time："<<time_used_KLT.count()<<" seconds."<<endl;
     // cout<<"LK Flow final number of points："<<img2_keypoints.size()<<" with threshold of " <<threshold<<"."<<endl;
     //
     // // =============================== End of CPU Version ===============================
@@ -117,11 +120,13 @@ int main( int argc, char** argv )
     cv::gpu::GpuMat d_frame_0(img_1);
     cv::gpu::GpuMat d_curr_pts;
     cv::gpu::GoodFeaturesToTrackDetector_GPU gpu_detector = GoodFeaturesToTrackDetector_GPU(250, 0.01, 0);
+    chrono::steady_clock::time_point t0 = chrono::steady_clock::now();
     gpu_detector(d_frame_0, d_curr_pts);
 
     // Save detected points
     vector<Point2f> kps(d_curr_pts.cols);
     download(d_curr_pts, kps);
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
 
     // Initialize grid in jetson board
     int grid_c_num = 10;
@@ -164,14 +169,13 @@ int main( int argc, char** argv )
     GpuMat d_back_status;
     PyrLKOpticalFlow d_pyrLK;
 
-    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
 
     // forward
     d_pyrLK.sparse(d_frame0, d_frame1, d_prevPts, d_nextPts, d_status);
     // backward
 	d_pyrLK.sparse(d_frame1, d_frame0, d_nextPts, d_backPts, d_back_status);
 
-    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     // download
     download(d_nextPts, next_keypoints);
     download(d_status, forward_status);
@@ -187,11 +191,10 @@ int main( int argc, char** argv )
     }
 
     chrono::steady_clock::time_point t3 = chrono::steady_clock::now();
-    chrono::duration<double> time_used_algo = chrono::duration_cast<chrono::duration<double>>( t2-t1 );
-    chrono::duration<double> time_used_down = chrono::duration_cast<chrono::duration<double>>( t3-t1 );
-    cout<<"LK Flow final number of points："<<img2_keypoints.size()<<" with threshold of " <<threshold<<"."<<endl;
-    cout<<"LK Flow use time："<<time_used_algo.count()<<" seconds."<<endl;
-    cout<<"LK Flow including variable donwloading use time："<<time_used_down.count()<<" seconds."<<endl;
+    chrono::duration<double> time_used_FD = chrono::duration_cast<chrono::duration<double>>( t1 - t0 );
+    chrono::duration<double> time_used_KLT = chrono::duration_cast<chrono::duration<double>>( t3 - t2 );
+    cout<<"FD use time："<<time_used_FD.count()<<" seconds."<<endl;
+    cout<<"LK Flow use time："<<time_used_KLT.count()<<" seconds."<<endl;
 
     // =============================== End of GPU Version ===============================
 
